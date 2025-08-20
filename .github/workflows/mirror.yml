@@ -1,0 +1,46 @@
+name: Mirror mogilev.media to GCS
+on:
+  schedule:
+    - cron: "0 * * * *"   # запуск каждый час
+  workflow_dispatch: {}    # возможность вручную запустить из GitHub
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install wget
+        run: sudo apt-get update && sudo apt-get install -y wget
+
+      - name: Mirror site with wget
+        run: |
+          rm -rf mirror && mkdir -p mirror
+          wget \
+            --mirror \
+            --convert-links \
+            --adjust-extension \
+            --page-requisites \
+            --no-parent \
+            --directory-prefix=mirror \
+            https://mogilev.media/
+
+      - name: Rewrite absolute links to GCS
+        run: |
+          BUCKET="${{ secrets.GCS_BUCKET }}"
+          find mirror -type f -name "*.html" -print0 | xargs -0 sed -i "s#https://mogilev.media/#https://storage.googleapis.com/${BUCKET}/#g"
+
+      - name: Sync to GCS
+        run: |
+          gsutil -m rsync -r -d mirror/mogilev.media gs://$GCS_BUCKET
+        env:
+          GCS_BUCKET: ${{ secrets.GCS_BUCKET }}
