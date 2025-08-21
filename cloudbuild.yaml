@@ -1,10 +1,61 @@
+# Cloud Build: собираем и пушим образ с хорошим кэшированием
+# Репозиторий образов: europe-west1-docker.pkg.dev/<PROJECT_ID>/mm-mirror-repo/mm-mirror
+
+substitutions:
+  # при желании можно поменять регион/имена
+  _REGION: "europe-west1"
+  _AR_REPO: "mm-mirror-repo"
+  _IMAGE: "mm-mirror"
+
 steps:
-  - name: gcr.io/cloud-builders/docker
-    args: ["build", "-t", "europe-west1-docker.pkg.dev/strong-province-463111-j9/mm-mirror-repo/mm-mirror:latest", "-f", "Dockerfile", "."]
-  - name: gcr.io/cloud-builders/docker
-    args: ["push", "europe-west1-docker.pkg.dev/strong-province-463111-j9/mm-mirror-repo/mm-mirror:latest"]
+  # 1) Попробуем подтянуть предыдущий :latest — это ускорит кэш
+  - name: "gcr.io/cloud-builders/docker"
+    id: "pull-cache"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        docker pull \
+          ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:latest \
+        || echo "no previous cache"
+
+  # 2) Сборка с использованием кэша
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build"
+    args:
+      - "build"
+      - "--build-arg"
+      - "BUILDKIT_INLINE_CACHE=1"
+      - "--cache-from"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:latest"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:latest"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA"
+      - "-f"
+      - "Dockerfile"
+      - "."
+
+  # 3) Публикация обоих тегов
+  - name: "gcr.io/cloud-builders/docker"
+    id: "push"
+    args:
+      - "push"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:latest"
+
+  - name: "gcr.io/cloud-builders/docker"
+    id: "push-sha"
+    args:
+      - "push"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA"
+
+# Права для билда (если используешь кастомный SA — оставь как ниже)
+serviceAccount: "projects/strong-province-463111-j9/serviceAccounts/mm-mirror-483hdsk@strong-province-463111-j9.iam.gserviceaccount.com"
+
+# Для удобства в UI
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:latest"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$SHORT_SHA"
+
 options:
   logging: CLOUD_LOGGING_ONLY
-serviceAccount: "projects/strong-province-463111-j9/serviceAccounts/mm-mirror-483hdsk@strong-province-463111-j9.iam.gserviceaccount.com"
-images:
-  - "europe-west1-docker.pkg.dev/strong-province-463111-j9/mm-mirror-repo/mm-mirror:latest"
