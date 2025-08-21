@@ -3,11 +3,8 @@ steps:
     args: ["build", "-t", "europe-west1-docker.pkg.dev/strong-province-463111-j9/mm-mirror-repo/mm-mirror:latest", "-f", "Dockerfile", "."]
   - name: gcr.io/cloud-builders/docker
     args: ["push", "europe-west1-docker.pkg.dev/strong-province-463111-j9/mm-mirror-repo/mm-mirror:latest"]
-
 options:
   logging: CLOUD_LOGGING_ONLY
-
 serviceAccount: "projects/strong-province-463111-j9/serviceAccounts/mm-mirror-483hdsk@strong-province-463111-j9.iam.gserviceaccount.com"
-
 images:
   - "europe-west1-docker.pkg.dev/strong-province-463111-j9/mm-mirror-repo/mm-mirror:latest"
