@@ -25,3 +25,21 @@ steps:
 images:
 - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:$SHORT_SHA
 - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - europe-west1-docker.pkg.dev/STRONG-PROVINCE-463111-J9/mm-mirror-repo/mm-mirror:latest
+      - -t
+      - europe-west1-docker.pkg.dev/STRONG-PROVINCE-463111-J9/mm-mirror-repo/mm-mirror:${SHORT_SHA}
+      - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - europe-west1-docker.pkg.dev/STRONG-PROVINCE-463111-J9/mm-mirror-repo/mm-mirror:latest
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - europe-west1-docker.pkg.dev/STRONG-PROVINCE-463111-J9/mm-mirror-repo/mm-mirror:${SHORT_SHA}
