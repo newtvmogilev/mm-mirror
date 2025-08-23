@@ -17,7 +17,8 @@ UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Ge
 # ===== ПРОВЕРКА ДОСТУПА К БАКЕТУ =====
 echo "[INFO] Checking write access to gs://$BUCKET ..."
 date -Iseconds > /tmp/_mm_mirror_probe.txt
-gsutil cp -q /tmp/_mm_mirror_probe.txt "gs://$BUCKET/_mm_last_probe.txt"
+# ВАЖНО: -q должен идти ПЕРЕД 'cp'
+gsutil -q cp /tmp/_mm_mirror_probe.txt "gs://$BUCKET/_mm_last_probe.txt"
 echo "[OK] Write to bucket works."
 
 # ===== ЗЕРКАЛО САЙТА =====
@@ -57,3 +58,4 @@ echo "[INFO] Sync to GCS..."
 gsutil -m rsync -r -d "$ROOT_DIR" "gs://$BUCKET"
 
 echo "[DONE] Mirror uploaded to gs://$BUCKET"
+
