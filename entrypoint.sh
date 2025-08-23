@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ===== ПАРАМЕТРЫ =====
-START_URL="${START_URL:-https://mogilev.media/}"
+START_URL="${START_URL:-https://mogilev.media/amp/}"
 DEPTH="${DEPTH:-3}"
 WORKDIR="/work"
 BUCKET="${GCS_BUCKET:?Set env var GCS_BUCKET}"
