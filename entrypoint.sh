@@ -1,30 +1,48 @@
 #!/bin/bash
-set -e
+set -Eeuo pipefail
 
-: "${START_URL:=https://mogilev.media/}"
-: "${DEPTH:=3}"
-: "${GCS_BUCKET:?Set env var GCS_BUCKET}"
+echo "[SCRIPT] mm-mirror v2025-08-23a"
 
-echo "[INFO] START_URL=${START_URL}  DEPTH=${DEPTH}  BUCKET=${GCS_BUCKET}"
+# -------- ПАРАМЕТРЫ --------
+START_URL="${START_URL:-https://mogilev.media/}"
+DEPTH="${DEPTH:-3}"
+BUCKET="${GCS_BUCKET:?Set env var GCS_BUCKET}"
+WORKDIR="/work"
 
-echo "[INFO] Checking write access to gs://${GCS_BUCKET} ..."
-echo "probe" | gsutil cp - "gs://${GCS_BUCKET}/_mm_last_probe.txt"
+UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+
+echo "[INFO] START_URL=${START_URL}  DEPTH=${DEPTH}  BUCKET=${BUCKET}"
+
+mkdir -p "$WORKDIR"
+
+# -------- ПРОБА ЗАПИСИ В БАКЕТ --------
+echo "[INFO] Checking write access to gs://${BUCKET} ..."
+date -Iseconds | gsutil -q cp - "gs://${BUCKET}/_mm_last_probe.txt"
 echo "[OK] Write to bucket works."
 
+# -------- МИРОВАНИЕ --------
 echo "[INFO] Running httrack..."
-httrack "${START_URL}" \
-    -O /work \
-    -w -r${DEPTH} -n -s0 -%k -c8 \
-    -F "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36" \
-    -*.woff -*.woff2 -*.ttf -*.eot \
-    -*googleapis.com/* -*gstatic.com/* -*googletagmanager.com/* -*google-analytics.com/* \
-    +*mogilev.media/*amp* \
-    +*mogilev.media/wp-content/uploads/*
+httrack "$START_URL" \
+  --path "$WORKDIR" \
+  --mirror \
+  --depth="$DEPTH" \
+  --robots=0 \
+  --keep-alive \
+  --sockets=8 \
+  --user-agent "$UA" \
+  --verbose
 
-echo "[INFO] Uploading mirrored files to gs://${GCS_BUCKET} ..."
-gsutil -m cp -r /work/* "gs://${GCS_BUCKET}/"
+# -------- ПОИСК КОРНЯ ДАМПА --------
+ROOT_DIR="$(find "$WORKDIR" -maxdepth 1 -type d -regextype posix-egrep -regex '.*/mogilev\.media(-[0-9]+)?' | head -n1)"
+if [[ -z "${ROOT_DIR:-}" ]]; then
+  echo "[WARN] Cannot find mogilev.media* folder under $WORKDIR, will use $WORKDIR itself"
+  ROOT_DIR="$WORKDIR"
+fi
+echo "[INFO] Mirror root: $ROOT_DIR"
+echo "[INFO] Files under root: $(find "$ROOT_DIR" -type f | wc -l)"
 
-echo "[INFO] Mirror job finished successfully."
+# -------- ПОЛНАЯ ЗАЛИВКА В БАКЕТ --------
+echo "[INFO] Uploading to gs://${BUCKET} via rsync..."
+gsutil -m rsync -r -d "$ROOT_DIR" "gs://${BUCKET}"
 
-
-
+echo "[DONE] Mirror uploaded to gs://${BUCKET}"
