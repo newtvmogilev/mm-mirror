@@ -1,17 +1,54 @@
+# cloudbuild.yaml
+
+# Чтобы не требовался bucket для логов при сборке под SA.
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: "E2_HIGHCPU_8"
+  dynamic_substitutions: true
+  # (необязательно) увеличь при необходимости
+  # timeout: "1800s"
+
+# Удобные параметры; при желании поменяй только _REPO и _IMAGE.
+substitutions:
+  _REGION: europe-west1
+  _REPO: mm-mirror-repo
+  _IMAGE: mm-mirror
+
+# Основные шаги: build + push (два тега)
 steps:
   - name: gcr.io/cloud-builders/docker
+    id: Build image
+    env: ["DOCKER_BUILDKIT=1"]
     args:
       - build
       - -t
-      - europe-west1-docker.pkg.dev/STRONG-PROVINCE-463111-J9/mm-mirror-repo/mm-mirror:latest
+      - europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest
       - -t
-      - europe-west1-docker.pkg.dev/STRONG-PROVINCE-463111-J9/mm-mirror-repo/mm-mirror:${SHORT_SHA}
+      - europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:${SHORT_SHA}
       - .
+
   - name: gcr.io/cloud-builders/docker
+    id: Push :latest
     args:
       - push
-      - europe-west1-docker.pkg.dev/STRONG-PROVINCE-463111-J9/mm-mirror-repo/mm-mirror:latest
+      - europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest
+
   - name: gcr.io/cloud-builders/docker
+    id: Push :$SHORT_SHA
     args:
       - push
-      - europe-west1-docker.pkg.dev/STRONG-PROVINCE-463111-J9/mm-mirror-repo/mm-mirror:${SHORT_SHA}
+      - europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:${SHORT_SHA}
+
+  # Полезно: вывести digest собранного тега (для закрепления в Cloud Run Job)
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: Print digest
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        gcloud artifacts docker images describe \
+          "europe-west1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:${SHORT_SHA}" \
+          --format='value(image_summary.digest)'
+
+# (необязательно) метки
+tags: ["mm-mirror", "docker", "artifact-registry"]
