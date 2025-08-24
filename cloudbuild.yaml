@@ -1,83 +1,18 @@
-#!/bin/bash
-set -euo pipefail
+# Cloud Build: собираем и пушим образ в Artifact Registry
+# Репозиторий образов: ${_AR_REGION}-docker.pkg.dev/${PROJECT_ID}/mm-mirror-repo/mm-mirror
 
-# -------- ПАРАМЕТРЫ (env) --------
-START_URL="${START_URL:-https://mogilev.media/}"    # что зеркалим
-DEPTH="${DEPTH:-3}"                                 # глубина обхода
-BUCKET="${GCS_BUCKET:?Set env var GCS_BUCKET}"      # gs://<ВАШ_БАКЕТ>
-WORKDIR="/work"
+substitutions:
+  _AR_REGION: europe-west1   # при желании поменяйте
 
-# Близко к обычному Chrome
-UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
-
-echo "[INFO] START_URL=${START_URL}"
-echo "[INFO] DEPTH=${DEPTH}"
-echo "[INFO] BUCKET=${BUCKET}"
-
-mkdir -p "$WORKDIR"
-
-# -------- ПРОВЕРКА ДОСТУПА К БАКЕТУ --------
-echo "[INFO] Checking write access to gs://${BUCKET} ..."
-date -Iseconds > /tmp/_mm_probe.txt
-gsutil cp -q /tmp/_mm_probe.txt "gs://${BUCKET}/_mm_last_probe.txt"
-echo "[OK] Write to bucket works."
-
-# -------- ЗЕРКАЛО --------
-echo "[INFO] Running httrack..."
-
-# Фильтры: внешние ресурсы, которые часто 404 и не нужны для рендера
-read -r -d '' FILTERS <<'EOF' || true
--https://fonts.googleapis.com/*
--https://fonts.gstatic.com/*
--https://www.googletagmanager.com/*
--https://www.google-analytics.com/*
--https://mc.yandex.ru/*
-EOF
-
-HT_FILTERS=()
-while IFS= read -r line; do
-  [[ -z "${line}" ]] && continue
-  HT_FILTERS+=("${line}")
-done <<< "${FILTERS}"
-
-# Запуск httrack
-httrack "${START_URL}" \
-  --path "${WORKDIR}" \
-  --mirror \
-  --depth="${DEPTH}" \
-  --near \
-  --robots=0 \
-  --keep-alive \
-  --sockets=8 \
-  --user-agent "${UA}" \
-  --update \
-  -v \
-  "${HT_FILTERS[@]}"
-
-# -------- ОПРЕДЕЛЯЕМ КОРЕНЬ ЗЕРКАЛА --------
-# Берём домен из START_URL и ищем папку вида <домен> или <домен>-N
-DOMAIN="$(printf '%s' "${START_URL}" | awk -F[/:] '{print $4}')"
-ROOT_DIR="$(find "${WORKDIR}" -maxdepth 1 -type d -regextype posix-extended -regex ".*/${DOMAIN}(-[0-9]+)?$" | head -n1 || true)"
-
-if [[ -z "${ROOT_DIR:-}" ]]; then
-  # запасной поиск
-  ROOT_DIR="$(find "${WORKDIR}" -maxdepth 2 -type d -name "${DOMAIN}*" | head -n1 || true)"
-fi
-
-if [[ -z "${ROOT_DIR:-}" ]]; then
-  echo "[ERROR] Cannot find mirror root under ${WORKDIR}"
-  find "${WORKDIR}" -maxdepth 2 -type d -print
-  exit 1
-fi
-
-echo "[INFO] Mirror root: ${ROOT_DIR}"
-
-# ВАЖНО: не переписываем ссылки на абсолютные к GCS —
-# httrack уже конвертирует внутренние на относительные, так верстка не ломается.
-
-# -------- ЗАЛИВКА В GCS --------
-echo "[INFO] Uploading to gs://${BUCKET} (rsync)..."
-gsutil -m rsync -r -d "${ROOT_DIR}" "gs://${BUCKET}"
-
-echo "[DONE] Mirror uploaded to gs://${BUCKET}"
-
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '-t'
+      - '${_AR_REGION}-docker.pkg.dev/${PROJECT_ID}/mm-mirror-repo/mm-mirror:${SHORT_SHA}'
+      - '-t'
+      - '${_AR_REGION}-docker.pkg.dev/${PROJECT_ID}/mm-mirror-repo/mm-mirror:latest'
+      - .
+images:
+  - '${_AR_REGION}-docker.pkg.dev/${PROJECT_ID}/mm-mirror-repo/mm-mirror:${SHORT_SHA}'
+  - '${_AR_REGION}-docker.pkg.dev/${PROJECT_ID}/mm-mirror-repo/mm-mirror:latest}'
