@@ -1,15 +1,10 @@
-# Минимальный образ с gsutil
-FROM gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+# База с gsutil внутри
+FROM google/cloud-sdk:slim
 
-# httrack + сертификаты
-RUN apt-get update \
- && apt-get install -y --no-install-recommends httrack ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y httrack && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+COPY run.sh /app/run.sh
+RUN chmod +x /app/run.sh
 
-# Точка входа
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/app/run.sh"]
