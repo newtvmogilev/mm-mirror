@@ -1,18 +1,5 @@
-# Cloud Build: собираем и пушим образ в Artifact Registry
-# Репозиторий образов: ${_AR_REGION}-docker.pkg.dev/${PROJECT_ID}/mm-mirror-repo/mm-mirror
-
-substitutions:
-  _AR_REGION: europe-west1   # при желании поменяйте
-
 steps:
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - build
-      - '-t'
-      - '${_AR_REGION}-docker.pkg.dev/${PROJECT_ID}/mm-mirror-repo/mm-mirror:${SHORT_SHA}'
-      - '-t'
-      - '${_AR_REGION}-docker.pkg.dev/${PROJECT_ID}/mm-mirror-repo/mm-mirror:latest'
-      - .
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build','-t','europe-central2-docker.pkg.dev/$PROJECT_ID/mirror-repo/httrack-mirror:latest','.']
 images:
-  - '${_AR_REGION}-docker.pkg.dev/${PROJECT_ID}/mm-mirror-repo/mm-mirror:${SHORT_SHA}'
-  - '${_AR_REGION}-docker.pkg.dev/${PROJECT_ID}/mm-mirror-repo/mm-mirror:latest}'
+- 'europe-central2-docker.pkg.dev/$PROJECT_ID/mirror-repo/httrack-mirror:latest'
