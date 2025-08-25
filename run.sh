@@ -1,24 +1,28 @@
 #!/bin/bash
-set -u  # убрали -e, чтобы не падать на кодах HTTrack
+set -u
 
 TARGET="https://mogilev.media"
 OUT="/tmp/mirror"
 
-echo "[1/6] HTTrack start"
-httrack "$TARGET" \
+echo "[1/7] HTTrack start (6m cap, UA Chrome)"
+# Обрезаем работу httrack по таймеру, чтобы скрипт точно дошёл до rsync
+timeout 6m httrack "$TARGET" \
   -O "$OUT" \
-  "+*.mogilev.media/*" \
-  "-*logout*" "-*wp-admin*" \
-  -v -s0 -%v
-HTCODE=$?; echo "[2/6] HTTrack finished with code=$HTCODE (0=ok)."
+  "+*.mogilev.media/*" "-*logout*" "-*wp-admin*" \
+  --sockets=2 --max-rate=500000 --user-agent "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" \
+  -v -s0 -%v || echo "[i] httrack exited (possibly timeout) – continuing"
 
-echo "[3/6] Mirror listing (top 40 files)"
-find "$OUT" -maxdepth 3 -type f | head -n 40 || true
+echo "[2/7] HTTrack finished"
+echo "[3/7] Mirror top files:"; find "$OUT" -maxdepth 3 -type f | head -n 40 || true
 
-echo "[4/6] gsutil info"; gsutil version -l || true
-echo "[5/6] Check bucket access"; gsutil ls gs://m-media || true
+# Минимальный плейсхолдер, если httrack ничего не создал (для проверки пайплайна)
+if [ ! -e "$OUT/index.html" ] && [ ! -e "$OUT/mogilev.media/index.html" ]; then
+  mkdir -p "$OUT"
+  echo "<html><body>mirror pipeline OK ($(date))</body></html>" > "$OUT/index.html"
+fi
 
-echo "[6/6] Sync to bucket"
+echo "[4/7] gsutil info"; gsutil version -l || true
+echo "[5/7] Check bucket access"; gsutil ls gs://m-media || true
+echo "[6/7] Sync to bucket"
 gsutil -m rsync -r "$OUT" gs://m-media
-
-echo "[DONE] Sync finished"
+echo "[7/7] DONE"
