@@ -1,5 +1,9 @@
 steps:
 - name: 'gcr.io/cloud-builders/docker'
   args: ['build','-t','europe-central2-docker.pkg.dev/$PROJECT_ID/mirror-repo/httrack-mirror:latest','.']
+
 images:
 - 'europe-central2-docker.pkg.dev/$PROJECT_ID/mirror-repo/httrack-mirror:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
