@@ -3,7 +3,12 @@ steps:
   args: ['build','-t','${_REGION}-docker.pkg.dev/$PROJECT_ID/mm-mirror/mirror:latest','.']
 - name: 'gcr.io/cloud-builders/docker'
   args: ['push','${_REGION}-docker.pkg.dev/$PROJECT_ID/mm-mirror/mirror:latest']
+
 substitutions:
   _REGION: europe-central2
+
 images:
 - '${_REGION}-docker.pkg.dev/$PROJECT_ID/mm-mirror/mirror:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY   # <— ЭТА СТРОКА ИСПРАВЛЯЕТ ОШИБКУ
