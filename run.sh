@@ -1,26 +1,23 @@
 #!/bin/bash
-set -u
+set -euo pipefail
 
-TARGET="https://www.google.com/amp/s/mogilev.media/"
+BUCKET="${BUCKET:?set BUCKET env}"
+TARGET="${TARGET:-https://mogilev.media/}"
 OUT="/tmp/mirror"
+rm -rf "$OUT"; mkdir -p "$OUT"
 
-echo "[1/6] Fetch AMP via Google cache"
-wget --mirror --convert-links --adjust-extension --page-requisites \
-     --no-verbose --timeout=30 --tries=3 --wait=0.3 --limit-rate=500k \
-     --user-agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" \
-     --span-hosts --domains=google.com,googleusercontent.com,cdn.ampproject.org,mogilev.media \
-     --accept-regex='^https://(www\.)?google\.com/amp/s/mogilev\.media/.*' \
-     -P "$OUT" "$TARGET" || true
+# Подключаем WARP мягко (если уже подключён — не упадём)
+warp-cli --accept-tos register || true
+warp-cli set-mode warp || true
+warp-cli connect || true
+warp-cli status || true
 
-echo "[2/6] Root index"
-mkdir -p "$OUT"
-cat > "$OUT/index.html" <<'EOF'
-<!doctype html><meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=https://www.google.com/amp/s/mogilev.media/">
-<a href="https://www.google.com/amp/s/mogilev.media/">Open mirror</a>
-EOF
+# Зеркалим
+httrack "$TARGET" -O "$OUT" "+*.mogilev.media/*" "-*logout*" "-*wp-admin*" \
+  --sockets=6 --max-rate=1500000 -s0 -%v -v \
+  --user-agent "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" \
+  || echo "[mirror] httrack non-zero -> continue"
 
-echo "[3/6] List top files"; find "$OUT" -maxdepth 3 -type f | head -n 20 || true
-echo "[4/6] gsutil info"; gsutil version -l || true
-echo "[5/6] Sync to bucket"; gsutil -m rsync -r "$OUT" gs://m-media
-echo "[6/6] DONE"
+# Синхронизируем в GCS
+gsutil -m rsync -r "$OUT" "gs://${BUCKET}"
+echo "[mirror] DONE"
