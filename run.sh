@@ -1,26 +1,24 @@
 #!/bin/bash
-set -euo pipefail
+set -u  # убрали -e, чтобы не падать на кодах HTTrack
 
 TARGET="https://mogilev.media"
 OUT="/tmp/mirror"
 
-echo "[1/5] HTTrack start"
+echo "[1/6] HTTrack start"
 httrack "$TARGET" \
   -O "$OUT" \
   "+*.mogilev.media/*" \
   "-*logout*" "-*wp-admin*" \
   -v -s0 -%v
+HTCODE=$?; echo "[2/6] HTTrack finished with code=$HTCODE (0=ok)."
 
-echo "[2/5] Mirror top-level listing:"
-find "$OUT" -maxdepth 2 -type f | head -n 30 || true
+echo "[3/6] Mirror listing (top 40 files)"
+find "$OUT" -maxdepth 3 -type f | head -n 40 || true
 
-echo "[3/5] gsutil version:"
-gsutil version -l || true
+echo "[4/6] gsutil info"; gsutil version -l || true
+echo "[5/6] Check bucket access"; gsutil ls gs://m-media || true
 
-echo "[4/5] Check bucket access (list):"
-gsutil ls gs://m-media || true
-
-echo "[5/5] Sync to bucket:"
+echo "[6/6] Sync to bucket"
 gsutil -m rsync -r "$OUT" gs://m-media
 
 echo "[DONE] Sync finished"
