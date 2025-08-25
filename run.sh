@@ -1,28 +1,26 @@
 #!/bin/bash
 set -u
 
-TARGET="https://mogilev.media"
+TARGET="https://www.google.com/amp/s/mogilev.media/"
 OUT="/tmp/mirror"
 
-echo "[1/7] HTTrack start (6m cap, UA Chrome)"
-# Обрезаем работу httrack по таймеру, чтобы скрипт точно дошёл до rsync
-timeout 6m httrack "$TARGET" \
-  -O "$OUT" \
-  "+*.mogilev.media/*" "-*logout*" "-*wp-admin*" \
-  --sockets=2 --max-rate=500000 --user-agent "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" \
-  -v -s0 -%v || echo "[i] httrack exited (possibly timeout) – continuing"
+echo "[1/6] Fetch AMP via Google cache"
+wget --mirror --convert-links --adjust-extension --page-requisites \
+     --no-verbose --timeout=30 --tries=3 --wait=0.3 --limit-rate=500k \
+     --user-agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36" \
+     --span-hosts --domains=google.com,googleusercontent.com,cdn.ampproject.org,mogilev.media \
+     --accept-regex='^https://(www\.)?google\.com/amp/s/mogilev\.media/.*' \
+     -P "$OUT" "$TARGET" || true
 
-echo "[2/7] HTTrack finished"
-echo "[3/7] Mirror top files:"; find "$OUT" -maxdepth 3 -type f | head -n 40 || true
+echo "[2/6] Root index"
+mkdir -p "$OUT"
+cat > "$OUT/index.html" <<'EOF'
+<!doctype html><meta charset="utf-8">
+<meta http-equiv="refresh" content="0; url=https://www.google.com/amp/s/mogilev.media/">
+<a href="https://www.google.com/amp/s/mogilev.media/">Open mirror</a>
+EOF
 
-# Минимальный плейсхолдер, если httrack ничего не создал (для проверки пайплайна)
-if [ ! -e "$OUT/index.html" ] && [ ! -e "$OUT/mogilev.media/index.html" ]; then
-  mkdir -p "$OUT"
-  echo "<html><body>mirror pipeline OK ($(date))</body></html>" > "$OUT/index.html"
-fi
-
-echo "[4/7] gsutil info"; gsutil version -l || true
-echo "[5/7] Check bucket access"; gsutil ls gs://m-media || true
-echo "[6/7] Sync to bucket"
-gsutil -m rsync -r "$OUT" gs://m-media
-echo "[7/7] DONE"
+echo "[3/6] List top files"; find "$OUT" -maxdepth 3 -type f | head -n 20 || true
+echo "[4/6] gsutil info"; gsutil version -l || true
+echo "[5/6] Sync to bucket"; gsutil -m rsync -r "$OUT" gs://m-media
+echo "[6/6] DONE"
